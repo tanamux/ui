@@ -1756,18 +1756,52 @@ function RayfieldLibrary:CreateWindow(Settings)
 
 		if typeof(Settings.KeySettings.Key) == "string" then Settings.KeySettings.Key = {Settings.KeySettings.Key} end
 
-		if Settings.KeySettings.GrabKeyFromSite then
-			for i, Key in ipairs(Settings.KeySettings.Key) do
-				local Success, Response = pcall(function()
-					Settings.KeySettings.Key[i] = tostring(game:HttpGet(Key):gsub("[\n\r]", " "))
-					Settings.KeySettings.Key[i] = string.gsub(Settings.KeySettings.Key[i], " ", "")
-				end)
-				if not Success then
-					print("Rayfield | "..Key.." Error " ..tostring(Response))
-					warn('Check docs.sirius.menu for help with Rayfield specific development.')
-				end
-			end
-		end
+        -- GANTI BLOK GrabKeyFromSite DENGAN KODE INI
+        if Settings.KeySettings.GrabKeyFromSite then
+            local fetchedKeys = {}
+        
+            -- pastikan Settings.KeySettings.Key adalah table URL
+            if typeof(Settings.KeySettings.Key) == "string" then
+                Settings.KeySettings.Key = {Settings.KeySettings.Key}
+            end
+        
+            for _, keyUrl in ipairs(Settings.KeySettings.Key) do
+                local ok, response = pcall(function()
+                    return game:HttpGet(keyUrl)
+                end)
+        
+                if not ok then
+                    warn("Rayfield | Error fetching key URL '"..tostring(keyUrl).."': "..tostring(response))
+                elseif type(response) ~= "string" or #response == 0 then
+                    warn("Rayfield | Empty response from '"..tostring(keyUrl).."'.")
+                else
+                    -- Parse response into tokens:
+                    -- mendukung: satu key per baris, koma-separasi, atau spasi-separasi
+                    -- juga membersihkan tanda kutip atau kurung jika ada, sehingga
+                    -- format seperti ("hello","hakutaka","mekanik") tetap bisa diparsing.
+                    for token in string.gmatch(response, "[^%s,]+") do
+                        local t = token
+                        -- trim spasi
+                        t = t:gsub("^%s+", ""):gsub("%s+$", "")
+                        -- hapus pembuka/penutup tanda kutip atau kurung seperti " ' ( [ dan penutupnya
+                        t = t:gsub('^["\'%(%[]+', ""):gsub('["\'%)%]]+$', "")
+                        -- hapus koma ujung (jika masih ada)
+                        t = t:gsub(",$", "")
+                        if #t > 0 then
+                            table.insert(fetchedKeys, t)
+                        end
+                    end
+                end
+            end
+        
+            if #fetchedKeys > 0 then
+                -- ganti Settings.KeySettings.Key dengan daftar key yang sudah diparsing
+                Settings.KeySettings.Key = fetchedKeys
+            else
+                warn("Rayfield | No keys parsed from provided RAW URLs.")
+            end
+        end
+        -- END GANTI BLOK
 
 		if not Settings.KeySettings.FileName then
 			Settings.KeySettings.FileName = "No file name specified"
