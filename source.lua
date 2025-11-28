@@ -1012,7 +1012,7 @@ local function SaveConfiguration()
 	end
 end
 
-function RayfieldLibrary:Notify(data) -- action e.g open messages
+function RayfieldLibrary:Notify(data)
 	task.spawn(function()
 		-- Notification Object Creation
 		local newNotification = Notifications.Template:Clone()
@@ -1024,10 +1024,10 @@ function RayfieldLibrary:Notify(data) -- action e.g open messages
 		-- Set Data
 		newNotification.Title.Text = data.Title or "Unknown Title"
 		newNotification.Description.Text = data.Content or "Unknown Content"
-        
-        -- [MODIFIKASI] Paksa ukuran font menjadi lebih kecil
-        newNotification.Title.TextSize = 14       -- Ukuran Judul (Standar biasanya 16-18)
-        newNotification.Description.TextSize = 12 -- Ukuran Deskripsi (Standar biasanya 14)
+
+		-- [UBAH DISINI] Ukuran Text Super Kecil
+		newNotification.Title.TextSize = 11       
+		newNotification.Description.TextSize = 10 
 
 		if data.Image then
 			if typeof(data.Image) == 'string' and Icons then
@@ -1063,23 +1063,24 @@ function RayfieldLibrary:Notify(data) -- action e.g open messages
 
 		if data.Actions then
 			warn('Rayfield | Not seeing your actions in notifications?')
-			print("Notification Actions are being sunset for now, keep up to date on when they're back in the discord. (sirius.menu/discord)")
+			print("Actions sunset info...")
 		end
 
-		-- Calculate textbounds and set initial values
+		-- Calculate textbounds
 		local bounds = {newNotification.Title.TextBounds.Y, newNotification.Description.TextBounds.Y}
-		
-        -- [MODIFIKASI] Mengatur lebar awal (Width)
+
+		-- [UBAH DISINI] Lebar Notifikasi
 		newNotification.Size = UDim2.new(1, -60, 0, -Notifications:FindFirstChild("UIListLayout").Padding.Offset)
 
-        -- [MODIFIKASI] Ikon diperkecil (dari 32 ke 24) dan posisi disesuaikan
-		newNotification.Icon.Size = UDim2.new(0, 24, 0, 24) 
-		newNotification.Icon.Position = UDim2.new(0, 15, 0.5, 0)
+		-- [UBAH DISINI] Ikon Super Kecil
+		newNotification.Icon.Size = UDim2.new(0, 18, 0, 18)
+		newNotification.Icon.Position = UDim2.new(0, 10, 0.5, 0) -- Lebih mepet ke kiri
 
-        -- [MODIFIKASI] Rumus tinggi notifikasi (Height) dibuat lebih ketat
-        -- Angka '16' adalah padding total (sebelumnya 31)
-        -- Angka '40' adalah tinggi minimum (sebelumnya 60)
-		TweenService:Create(newNotification, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {Size = UDim2.new(1, 0, 0, math.max(bounds[1] + bounds[2] + 16, 40))}):Play()
+		-- [UBAH DISINI] Tinggi Super Pendek (Micro)
+		-- Rumus: (Tinggi Judul + Tinggi Deskripsi + 6 pixel padding). Min tinggi 28 pixel.
+		local targetHeight = math.max(bounds[1] + bounds[2] + 6, 28)
+		
+		TweenService:Create(newNotification, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
 
 		task.wait(0.15)
 		TweenService:Create(newNotification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {BackgroundTransparency = 0.45}):Play()
@@ -1112,6 +1113,7 @@ function RayfieldLibrary:Notify(data) -- action e.g open messages
 		newNotification:Destroy()
 	end)
 end
+
 
 
 local function openSearch()
