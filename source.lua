@@ -1746,6 +1746,10 @@ function RayfieldLibrary:CreateWindow(Settings)
 
     -- REPLACEMENT BLOCK: Key System handling (paste over the existing KeySystem block in source.lua)
     
+-- Replace the existing "REPLACEMENT BLOCK: Key System handling" in source.lua with this safer, non-blocking version.
+-- This version shows the Key UI when the user is NOT listed, but does NOT block the whole CreateWindow() with a repeat loop.
+-- Instead it aborts further window initialization early to avoid duplicated UI/frame flicker.
+
     if (Settings.KeySystem) then
         if not Settings.KeySettings then
             Passthrough = true
@@ -1776,7 +1780,6 @@ function RayfieldLibrary:CreateWindow(Settings)
                 elseif type(response) ~= "string" or #response == 0 then
                     warn("Rayfield | Empty response from '"..tostring(keyUrl).."'.")
                 else
-                    -- parse tokens: one-per-line, comma or space separated, strip quotes/brackets
                     for token in string.gmatch(response, "[^%s,]+") do
                         local t = token
                         t = t:gsub("^%s+", ""):gsub("%s+$", "")
@@ -1800,7 +1803,6 @@ function RayfieldLibrary:CreateWindow(Settings)
             Settings.KeySettings.FileName = "No file name specified"
         end
     
-        -- Determine whether the local player's username appears in the fetched list
         local localName = Players.LocalPlayer and Players.LocalPlayer.Name or ""
         local localNameLower = string.lower(localName)
         local isListed = false
@@ -1814,7 +1816,7 @@ function RayfieldLibrary:CreateWindow(Settings)
             end
         end
     
-        -- Also preserve saved-file behaviour (backwards compatibility)
+        -- Backwards compatibility: check saved file
         if not isListed and isfile and isfile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension) then
             local saved = readfile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension)
             if saved and #saved > 0 then
@@ -1828,33 +1830,37 @@ function RayfieldLibrary:CreateWindow(Settings)
             end
         end
     
-        -- If local username is listed -> allow passthrough immediately
         if isListed then
             Passthrough = true
-            -- optionally save the matched entry
             if Settings.KeySettings.SaveKey and matchedEntry and writefile then
                 pcall(function()
                     writefile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension, tostring(matchedEntry))
                 end)
             end
         else
-            -- NOT listed: DO NOT SHOW key input. Show a note instructing user to join Discord and provide a Copy button.
+            -- NOT listed: show non-blocking Key UI and abort CreateWindow early to avoid double UI/frame issues.
             Rayfield.Enabled = false
-            local KeyUI = useStudio and script.Parent:FindFirstChild('Key') or game:GetObjects("rbxassetid://11380036235")[1]
-            KeyUI.Enabled = true
     
+            local KeyUI = useStudio and script.Parent:FindFirstChild('Key') or game:GetObjects("rbxassetid://11380036235")[1]
+            if not KeyUI then
+                -- Fallback: notify and stop initialisation
+                RayfieldLibrary:Notify({Title = "Key System", Content = "Key UI asset not found. Access restricted.", Duration = 6})
+                return
+            end
+    
+            KeyUI.Enabled = true
             if gethui then
                 KeyUI.Parent = gethui()
-            elseif syn and syn.protect_gui then 
+            elseif syn and syn.protect_gui then
                 syn.protect_gui(KeyUI)
                 KeyUI.Parent = CoreGui
             elseif not useStudio and CoreGui:FindFirstChild("RobloxGui") then
                 KeyUI.Parent = CoreGui:FindFirstChild("RobloxGui")
-            elseif not useStudio then
+            else
                 KeyUI.Parent = CoreGui
             end
     
-            -- Hide other existing duplicate UIs
+            -- Hide duplicate KeyUIs
             if gethui then
                 for _, Interface in ipairs(gethui():GetChildren()) do
                     if Interface.Name == KeyUI.Name and Interface ~= KeyUI then
@@ -1862,7 +1868,7 @@ function RayfieldLibrary:CreateWindow(Settings)
                         Interface.Name = "KeyUI-Old"
                     end
                 end
-            elseif not useStudio then
+            else
                 for _, Interface in ipairs(CoreGui:GetChildren()) do
                     if Interface.Name == KeyUI.Name and Interface ~= KeyUI then
                         Interface.Enabled = false
@@ -1875,12 +1881,10 @@ function RayfieldLibrary:CreateWindow(Settings)
             KeyMain.Title.Text = Settings.KeySettings.Title or Settings.Name
             KeyMain.Subtitle.Text = Settings.KeySettings.Subtitle or "Key System"
     
-            -- Prepare note text and discord link
             local noteText = Settings.KeySettings.Note or "Join My Discord To Get Key"
             KeyMain.NoteMessage.Text = noteText
             KeyMain.NoteTitle.Text = "Access Restricted"
     
-            -- Hide input area so user can't attempt key login
             if KeyMain:FindFirstChild("Input") then
                 KeyMain.Input.Visible = false
             end
@@ -1888,8 +1892,9 @@ function RayfieldLibrary:CreateWindow(Settings)
                 KeyMain.KeyNote.Visible = false
             end
     
-            -- Create (or reuse) a Copy Discord button
             local discordLink = Settings.KeySettings.DiscordInvite or Settings.KeySettings.Discord or "https://discord.gg/your-discord-invite"
+    
+            -- Create copy button if missing
             local copyBtn = KeyMain:FindFirstChild("CopyDiscordButton")
             if not copyBtn then
                 copyBtn = Instance.new("TextButton")
@@ -1907,7 +1912,6 @@ function RayfieldLibrary:CreateWindow(Settings)
                 copyBtn.Visible = true
             end
     
-            -- Adjust sizes/visibility for note UI
             KeyMain.Size = UDim2.new(0, 467, 0, 150)
             KeyMain.BackgroundTransparency = 0
             KeyMain.Shadow.Image.ImageTransparency = 0.5
@@ -1916,11 +1920,9 @@ function RayfieldLibrary:CreateWindow(Settings)
             KeyMain.NoteMessage.TextTransparency = 0
             KeyMain.NoteTitle.TextTransparency = 0
     
-            -- Copy action (try setclipboard, fallback to showing notification with link)
             copyBtn.MouseButton1Click:Connect(function()
-                local done = false
-                -- try many common clipboard functions used by executors
-                local ok, err = pcall(function()
+                local ok = false
+                pcall(function()
                     if setclipboard then
                         setclipboard(discordLink)
                     elseif psetclipboard then
@@ -1930,18 +1932,16 @@ function RayfieldLibrary:CreateWindow(Settings)
                     else
                         error("no clipboard function")
                     end
+                    ok = true
                 end)
                 if ok then
                     RayfieldLibrary:Notify({Title = "Discord Invite", Content = "Discord invite copied to clipboard.", Image = 4483362748})
-                    done = true
                 else
-                    -- fallback: display link in NoteMessage and notify user to copy it manually
                     KeyMain.NoteMessage.Text = "Copy this invite: " .. discordLink
                     RayfieldLibrary:Notify({Title = "Discord Invite", Content = "Unable to auto-copy. The invite is shown in the note.", Image = 4483362748})
                 end
             end)
     
-            -- Hide/Close behaviour
             if KeyMain:FindFirstChild("Hide") then
                 KeyMain.Hide.ImageTransparency = 0.3
                 KeyMain.Hide.MouseButton1Click:Connect(function()
@@ -1958,13 +1958,9 @@ function RayfieldLibrary:CreateWindow(Settings)
                 end)
             end
     
-            -- Do NOT set Passthrough here; user must be listed to proceed.
-            -- Script will block at the "repeat until Passthrough" check below until the raw list is updated to include the username
+            -- Abort further CreateWindow initialization so we don't proceed and cause UI duplication/frame flicker.
+            return
         end
-    end
-    
-    if Settings.KeySystem then
-        repeat task.wait() until Passthrough
     end
 
 	Notifications.Template.Visible = false
